@@ -15,8 +15,8 @@ User Question  →  Retriever  →  Context Assembly  →  LLM (GPT-3.5)  →  A
 | Layer         | Technology                  |
 |---------------|-----------------------------|
 | Framework     | FastAPI                     |
-| LLM           | OpenAI GPT-3.5-Turbo        |
-| Embeddings    | OpenAI Embeddings           |
+| LLM           | Google Gemini Flash 2.0     |
+| Embeddings    | HuggingFace (all-MiniLM-L6) |
 | Vector Store  | FAISS (CPU)                 |
 | Orchestration | LangChain                   |
 | PDF Parsing   | PyPDF                       |
