@@ -1,5 +1,7 @@
 # Financial Document RAG Assistant
 
+![Financial Document RAG Assistant](Sample.png)
+
 A Retrieval-Augmented Generation (RAG) system developed for high-precision querying of financial and regulatory documents. The system utilizes the Google Gemini 3 API for both semantic embeddings and language generation, indexed within a FAISS vector store.
 
 ## Architecture
