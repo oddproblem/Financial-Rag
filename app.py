@@ -15,9 +15,9 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_community.vectorstores import FAISS
+from google import genai
+from google.genai import types
 
 # ─── Load environment variables ───────────────────────────────────────
 load_dotenv()
@@ -32,15 +32,39 @@ app = FastAPI(
 # ─── Load vector store & models at startup ────────────────────────────
 VECTOR_STORE_PATH = "vector_store"
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Use GEMINI_API_KEY if available, else fallback to GOOGLE_API_KEY
+api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+client = genai.Client(api_key=api_key)
+
+def embed_query(text: str) -> list[float]:
+    response = client.models.embed_content(
+        model="gemini-embedding-001",
+        contents=text
+    )
+    return response.embeddings[0].values
+
+def embed_documents(texts: list[str]) -> list[list[float]]:
+    response = client.models.embed_content(
+        model="gemini-embedding-001",
+        contents=texts
+    )
+    return [e.values for e in response.embeddings]
+
+class CustomGoogleEmbeddings:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return embed_documents(texts)
+    def embed_query(self, text: str) -> list[float]:
+        return embed_query(text)
+    def __call__(self, text: str) -> list[float]:
+        return self.embed_query(text)
+
+embeddings = CustomGoogleEmbeddings()
 vectorstore = FAISS.load_local(
     VECTOR_STORE_PATH,
     embeddings,
     allow_dangerous_deserialization=True,
 )
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────
@@ -66,37 +90,46 @@ def ask(
     FAISS vector store, constructs a context, queries the Gemini LLM, and
     returns the answer together with the source documents.
     """
+    try:
+        # 1. Retrieve relevant document chunks
+        docs = retriever.invoke(question)
 
-    # 1. Retrieve relevant document chunks
-    docs = retriever.invoke(question)
+        # 2. Build context from retrieved chunks
+        context = "\n\n---\n\n".join([doc.page_content for doc in docs])
 
-    # 2. Build context from retrieved chunks
-    context = "\n\n---\n\n".join([doc.page_content for doc in docs])
+        # 3. Extract unique source file names
+        sources = list({doc.metadata.get("source", "unknown") for doc in docs})
 
-    # 3. Extract unique source file names
-    sources = list({doc.metadata.get("source", "unknown") for doc in docs})
+        # 4. Build prompt and query the LLM
+        system_prompt = (
+            "You are a helpful financial analyst assistant. "
+            "Answer the user's question based ONLY on the provided context. "
+            "If the context does not contain enough information, say so. "
+            "Be concise and cite relevant details."
+        )
 
-    # 4. Build prompt and query the LLM
-    system_prompt = (
-        "You are a helpful financial analyst assistant. "
-        "Answer the user's question based ONLY on the provided context. "
-        "If the context does not contain enough information, say so. "
-        "Be concise and cite relevant details."
-    )
+        user_prompt = (
+            f"Context:\n{context}\n\n"
+            f"Question: {question}"
+        )
 
-    user_prompt = (
-        f"Context:\n{context}\n\n"
-        f"Question: {question}"
-    )
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview", 
+            contents=[
+                types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)]),
+                types.Content(role="user", parts=[types.Part.from_text(text=user_prompt)])
+            ],
+            config=types.GenerateContentConfig(temperature=0.0)
+        )
 
-    response = llm.invoke([
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt),
-    ])
-
-    # 5. Return structured response
-    return {
-        "question": question,
-        "answer": response.content,
-        "sources": sources,
-    }
+        # 5. Return structured response
+        return {
+            "question": question,
+            "answer": response.text,
+            "sources": sources,
+        }
+    except Exception as e:
+        print(f"Error in /ask: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}

@@ -6,58 +6,58 @@
 - [x] **Project Structure**: Set up `data/pdfs/` for raw documents, `vector_store/` for FAISS DB, and empty `app.py` & `ingest.py`.
 
 ## Phase 2: Data Gathering & Preparation
-- [ ] **Download PDFs**: 
+- [x] **Download PDFs**: 
   - Go to official sources (e.g., BIS for Basel III, RBI, World Bank).
   - Download 3 to 5 financial/regulatory documents in `.pdf` format.
   - Move the downloaded files into the `data/pdfs/` directory in this project.
-- [ ] **Environment Variables**:
+- [x] **Environment Variables**:
   - Create a `.env` file in the root directory.
-  - Add your OpenAI API key: `OPENAI_API_KEY=your_actual_api_key_here`.
+  - Add your Gemini API key: `GOOGLE_API_KEY=your_actual_api_key_here`.
 
 ## Phase 3: The Ingestion Pipeline (`ingest.py`)
 *Goal: Convert PDFs into searchable mathematical vectors.*
-- [ ] **Import Libraries**: Import `PyPDFLoader`, `RecursiveCharacterTextSplitter`, `FAISS`, `OpenAIEmbeddings`, `dotenv` and `os`.
-- [ ] **Load Credentials**: Call `load_dotenv()` to pull in your OpenAI API Key.
-- [ ] **Iterate and Load Files**:
+- [x] **Import Libraries**: Import `PyPDFLoader`, `RecursiveCharacterTextSplitter`, `FAISS`, `GoogleGenerativeAIEmbeddings`, `dotenv` and `os`.
+- [x] **Load Credentials**: Call `load_dotenv()` to pull in your Gemini API Key.
+- [x] **Iterate and Load Files**:
   - Loop through `os.listdir("data/pdfs")`.
   - For each `.pdf` file, use `PyPDFLoader(file_path)` and call `.load()`.
   - Accumulate all returned pages into a single `documents` list.
-- [ ] **Chunk the Text**:
+- [x] **Chunk the Text**:
   - Initialize `RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)`.
   - Pass the `documents` list into `text_splitter.split_documents(documents)`.
-- [ ] **Create Vector DB**:
-  - Initialize the embedding model: `embeddings = OpenAIEmbeddings()`.
+- [x] **Create Vector DB**:
+  - Initialize the embedding model: `embeddings = GoogleGenerativeAIEmbeddings()`.
   - Pass the chunked text and the embedding model to `FAISS.from_documents()`.
-- [ ] **Save and Run**:
+- [x] **Save and Run**:
   - Save the resulting vector DB: `vectorstore.save_local("vector_store")`.
   - Open terminal and run `python ingest.py`. Verify `vector_store/` populates with `.faiss` and `.pkl` files.
 
 ## Phase 4: The FastAPI Backend & RAG Chain (`app.py`)
 *Goal: Create an API endpoint that handles the retrieval-augmented generation.*
-- [ ] **Import Libraries**: `FastAPI`, `FAISS`, `OpenAIEmbeddings`, `ChatOpenAI`, `RetrievalQA`, etc.
-- [ ] **Initialize the Application**: 
+- [x] **Import Libraries**: `FastAPI`, `FAISS`, `GoogleGenerativeAIEmbeddings`, `ChatGoogleGenerativeAI`, `RetrievalQA`, etc.
+- [x] **Initialize the Application**: 
   - `app = FastAPI(title="Financial RAG API")`
   - Load environment variables using `dotenv`.
-- [ ] **Load Vector Store**:
-  - Re-initialize `OpenAIEmbeddings()`.
+- [x] **Load Vector Store**:
+  - Re-initialize `GoogleGenerativeAIEmbeddings()`.
   - Load DB: `vectorstore = FAISS.load_local("vector_store", embeddings, allow_dangerous_deserialization=True)`.
   - Create retriever: `retriever = vectorstore.as_retriever(search_kwargs={"k": 3})`.
-- [ ] **Setup the LLM and Chain**:
-  - Initialize LLM: `llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)`.
+- [x] **Setup the LLM and Chain**:
+  - Initialize LLM: `llm = ChatGoogleGenerativeAI(model="gemini-3.0-pro", temperature=0)`.
   - *Option 1 (Simple)*: Use `RetrievalQA.from_chain_type(...)`.
   - *Option 2 (With Citations)*: Skip `RetrievalQA` and build a custom function (see Phase 5).
-- [ ] **Create the GET Endpoint (`/ask`)**:
+- [x] **Create the GET Endpoint (`/ask`)**:
   - Define `@app.get("/ask")`.
   - Accept a `question: str` parameter.
 
 ## Phase 5: Implementing Source Citations
 *Goal: Prove to the user where the information came from.*
-- [ ] **Custom Retrieval Logic inside `/ask`**:
+- [x] **Custom Retrieval Logic inside `/ask`**:
   - Step 1: Use `docs = retriever.invoke(question)` (or `.get_relevant_documents`).
   - Step 2: Combine the document content: `context = "\n\n".join([d.page_content for d in docs])`.
   - Step 3: Combine sources: Extract `d.metadata["source"]` from the list of retrieved documents.
   - Step 4: Manually prompt the LLM: `prompt = f"Context: {context}\n\nQuestion: {question}"` and `answer = llm.invoke(prompt)`.
-- [ ] **Return JSON Response**:
+- [x] **Return JSON Response**:
   - Return a dictionary: `{"question": question, "answer": answer, "sources": source_list}`.
 
 ## Phase 6: Run and Test

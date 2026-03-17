@@ -8,7 +8,8 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from google import genai
+from langchain_core.documents import Document
 
 # Fix Windows console encoding
 sys.stdout.reconfigure(encoding="utf-8")
@@ -42,8 +43,27 @@ def main():
     print(f"  [OK] Created {len(chunks)} chunks.\n")
 
     # 3. Embed & Save
-    print("Step 3/3 - Creating Local HuggingFace embeddings & saving FAISS index ...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    print("Step 3/3 - Creating Google Gemini embeddings & saving FAISS index ...")
+    
+    client = genai.Client()
+    def embed_documents(texts: list[str]) -> list[list[float]]:
+        response = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=texts
+        )
+        return [e.values for e in response.embeddings]
+        
+    class CustomGoogleEmbeddings:
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return embed_documents(texts)
+        def embed_query(self, text: str) -> list[float]:
+            response = client.models.embed_content(
+                model="gemini-embedding-001",
+                contents=text
+            )
+            return response.embeddings[0].values
+
+    embeddings = CustomGoogleEmbeddings()
     vectorstore = FAISS.from_documents(chunks, embeddings)
     vectorstore.save_local(VECTOR_STORE_PATH)
 
